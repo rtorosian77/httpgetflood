@@ -2,13 +2,13 @@ import subprocess
 from multiprocessing import Pool
 from contextlib import closing
 
-poolSize = 100
-attempts = 100
+poolSize = 2
+attempts = 10
 curlTimeout = 5
 aggregate = {'http_code': {}, 'time_namelookup': float(0), 'time_connect': float(0), 'time_pretransfer': float(0), 'time_starttransfer': float(0), 'time_total': float(0), 'failure_rate': float(0)}
 
 def execCurl():
-    cmd = 'curl -k --max-time ' + str(curlTimeout) +  ' https://welcomeconnect.service-now.com/beneficiary?id=welcome_user_registration&sys_id=479a0b2347f3c110f967ca5c346d434b  -H "Host: welcomeus.service-now.com" -s -o /dev/null -w "response_code: %{http_code} dns_time: %{time_namelookup} connect_time: %{time_connect} pretransfer_time: %{time_pretransfer} starttransfer_time: %{time_starttransfer} total_time: %{time_total}"'
+    cmd = 'curl -k --max-time ' + str(curlTimeout) +  ' https://welcomeconnect.service-now.com/beneficiary  -s -o /dev/null -w "response_code: %{http_code} dns_time: %{time_namelookup} connect_time: %{time_connect} pretransfer_time: %{time_pretransfer} starttransfer_time: %{time_starttransfer} total_time: %{time_total}"'
     try:
         res = subprocess.check_output(cmd, shell=True)
         parts = res.split()
@@ -41,41 +41,41 @@ def run(thread):
     if denom == 0:
         return False
     for key,value in localAgg.items():
-        if key is 'http_code':
+        if key == 'http_code':
             pass
         else:
             localAgg[key] = round(value / denom, 2)
     localAgg['failure_rate'] = round(failedAttempts / attempts, 2)
     return localAgg
 
+if __name__ == "__main__":
+    with closing(Pool(processes=poolSize)) as pool:
+        callbacks = pool.map_async(run, range(poolSize)).get(999999)
+        for result in callbacks:
+            if not result:
+                print("No valid results from thread")
+            else:
+                for key,value in result.items():
+                    if 'http_code' in key:
+                        for hkey, hval in result['http_code'].items():
+                            if hkey in aggregate['http_code'].keys():
+                                aggregate['http_code'][hkey] += hval
+                            else:
+                                aggregate['http_code'][hkey] = hval
+                        print('http_code counts:')
+                        for hkey,hval in result['http_code'].items():
+                            print('\t' + str(hkey) + ': ' + str(hval))
+                    else:
+                        aggregate[key] += value
+                        print(key + ": " + str(value))
+                print("**********************************")
 
-with closing(Pool(processes=poolSize)) as pool:
-    callbacks = pool.map_async(run, range(poolSize)).get(999999)
-    for result in callbacks:
-        if not result:
-            print("No valid results from thread")
+
+    print("Average results:")
+    for key,value in aggregate.items():
+        if key == 'http_code':
+            print('http_code counts:')
+            for hkey,hval in aggregate['http_code'].items():
+                print('\t' + str(hkey) + ': ' + str(hval))
         else:
-            for key,value in result.items():
-                if 'http_code' in key:
-                    for hkey, hval in result['http_code'].items():
-                        if hkey in aggregate['http_code'].keys():
-                            aggregate['http_code'][hkey] += hval
-                        else:
-                            aggregate['http_code'][hkey] = hval
-                    print('http_code counts:')
-                    for hkey,hval in result['http_code'].items():
-                        print('\t' + str(hkey) + ': ' + str(hval))
-                else:
-                    aggregate[key] += value
-                    print(key + ": " + str(value))
-            print("**********************************")
-
-
-print("Average results:")
-for key,value in aggregate.items():
-    if key is 'http_code':
-        print('http_code counts:')
-        for hkey,hval in aggregate['http_code'].items():
-            print('\t' + str(hkey) + ': ' + str(hval))
-    else:
-        print(key + ": " + str(round(value / poolSize, 2)))
+            print(key + ": " + str(round(value / poolSize, 2)))

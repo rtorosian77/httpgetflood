@@ -1,3 +1,3 @@
-Requires Linux or maybe Python<=3.7 on MacOS (needs to use fork).
+poolSize is the number of threads and attempts is the number of jobs per thread.  Change the embedded curl command as required for the URL to test.
 
-Variable poolSize is the number of threads and attempts is the number of jobs per thread.
+If you turn both parameters up to 100 or more you can push ~50Mbit/s of traffic if you are looking for a load-test.
